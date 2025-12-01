@@ -1,0 +1,35 @@
+{
+  "name": "dna",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DNA sequence comparison tool with NCBI integration",
+  "main": "compare.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "compare": "node compare.js",
+    "orthologs": "node find-orthologs.js",
+    "batch": "node batch-compare.js",
+    "lint": "eslint . --fix"
+  },
+  "keywords": [
+    "dna",
+    "sequence",
+    "alignment",
+    "ncbi",
+    "bioinformatics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bottleneck": "^2.19.5",
+    "inquirer": "^8.2.5"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.14",
+    "@vitest/ui": "^4.0.14",
+    "vitest": "^4.0.14"
+  }
+}

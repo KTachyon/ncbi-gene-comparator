@@ -1,0 +1,77 @@
+// Sample DNA sequences for testing
+
+export const SAMPLE_FASTA_1 = `>NM_001001.1 Homo sapiens test gene (TEST1), mRNA
+ATGAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGG
+TTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGG`;
+
+export const SAMPLE_FASTA_2 = `>NM_001002.1 Mus musculus test gene (Test1), mRNA
+ATGAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGG
+TTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGGTTTAAACCCGGG`;
+
+// FASTA parser test samples
+export const SAMPLE_FASTA_SIMPLE = `>NM_001001.1 Test sequence
+ATGCCCGGG`;
+
+export const SAMPLE_FASTA_MULTILINE = `>NM_001001.1 Test sequence
+ATGCCCGGG
+TTTAAACCC
+GGGTTTAAA`;
+
+export const SAMPLE_FASTA_WITH_WHITESPACE = `>NM_001001.1 Test sequence
+
+ATGCCCGGG
+
+TTTAAACCC
+
+`;
+
+export const SAMPLE_FASTA_SPECIAL_CHARS = `>Header with special chars [gene=TEST1]
+ATGC`;
+
+export const SAMPLE_FASTA_EMPTY_SEQUENCE = `>NM_001001.1 Test sequence
+
+`;
+
+export const SAMPLE_FASTA_NO_HEADER = `ATGCCCGGG`;
+
+export const SAMPLE_DNA_PERFECT_MATCH = {
+  seq1: "ATGAAACCCGGGTTT",
+  seq2: "ATGAAACCCGGGTTT"
+};
+
+export const SAMPLE_DNA_WITH_MISMATCH = {
+  seq1: "ATGAAACCCGGGTTT",
+  seq2: "ATGAAACCCTGGTTT" // C->T and G->T mismatches
+};
+
+export const SAMPLE_DNA_WITH_OFFSET = {
+  seq1: "ATGAAACCCGGGTTTCCC",
+  seq2: "   AAACCCGGGTTTCCCGGG"
+};
+
+export const SAMPLE_PROTEIN_TRANSLATION = {
+  dna: "ATGAAACCCGGGTTT",
+  protein: "MKPGF"
+};
+
+export const SAMPLE_INVALID_DNA = "ATGXYZABC";
+
+export const SAMPLE_GENE_MAP = {
+  genes: {
+    "TEST1": {
+      human: "NM_001001.1",
+      rhesus: "NM_001002.1",
+      mouse: "NM_001003.1"
+    }
+  },
+  metadata: {
+    lastUpdated: "2024-01-01T00:00:00.000Z",
+    totalGenes: 1
+  }
+};
+
+export const SAMPLE_CONSERVED_BLOCKS = {
+  mask: "ATGATGATGATGATG???ATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATGATG",
+  expectedBlocks: 1
+};
+

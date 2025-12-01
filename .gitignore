@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Fetched sequences from NCBI
+seqs/
+
+# Generated
+gene-map.json
+
+# Logs
+*.log
+npm-debug.log*
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
