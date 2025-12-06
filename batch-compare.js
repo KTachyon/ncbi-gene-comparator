@@ -8,6 +8,7 @@ import { runSingleComparison } from "./lib/sequence-loader.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
 import { getGeneNames } from "./lib/genes.js";
 import { init as initComparison } from "./lib/comparison.js";
+import { generateBatchHTML, generateBatchTableHTML, saveHTMLReport } from "./lib/html-report.js";
 
 const GENE_LIST = getGeneNames();
 
@@ -105,17 +106,19 @@ const runComparison = async (accession1, accession2, silent = true) => {
 
 // Main
 (async () => {
+  const startTime = Date.now();
   console.time('⏱️  Total time');
   
   const args = process.argv.slice(2);
   
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: node batch-compare.js [--nm-only]');
+    console.log('Usage: node batch-compare.js [--nm-only] [--unique-blocks]');
     console.log('');
     console.log(`Batch comparison of ${GENE_LIST.length} orthologous genes across ${Object.keys(ORGANISMS).length} species`);
     console.log('');
     console.log('Options:');
     console.log('  --nm-only       Only use NM_ (curated) sequences, skip XM_ (predicted)');
+    console.log('  --unique-blocks Only count genes that have unique blocks (single block, not fragmented)');
     console.log('');
     console.log('This script will:');
     console.log(`  1. Find orthologs for ${GENE_LIST.length} curated genes (uses cached results when available)`);
@@ -141,6 +144,7 @@ const runComparison = async (accession1, accession2, silent = true) => {
   }
   
   const nmOnly = args.includes('--nm-only');
+  const uniqueBlocks = args.includes('--unique-blocks');
   
   console.log(`\n${"=".repeat(MAX_LINE_LENGTH)}`);
   console.log(`BATCH ORTHOLOG COMPARISON`);
@@ -151,6 +155,9 @@ const runComparison = async (accession1, accession2, silent = true) => {
   console.log(`Total comparisons: ${GENE_LIST.length * COMPARISON_PAIRS.length} (${GENE_LIST.length} genes × ${COMPARISON_PAIRS.length} species pairs)`);
   if (nmOnly) {
     console.log(`Filter: NM_ sequences only (excluding XM_ predicted sequences)`);
+  }
+  if (uniqueBlocks) {
+    console.log(`Filter: Only genes with unique blocks (single block, not fragmented)`);
   }
   console.log('');
   
@@ -246,7 +253,15 @@ const runComparison = async (accession1, accession2, silent = true) => {
     const hasConservedBlocks = (result) => result && result.nucConservedLength > 0 && result.aaConservedLength > 0;
     const allSuccessful = COMPARISONS_CONFIG.every(config => hasConservedBlocks(results[config.key]));
     
-    if (allSuccessful) {
+    // If --unique-blocks flag is set, only include genes with exactly 1 block in all comparisons
+    const hasUniqueBlocks = uniqueBlocks 
+      ? COMPARISONS_CONFIG.every(config => {
+          const r = results[config.key];
+          return r && r.numNucBlocks === 1 && r.numAABlocks === 1;
+        })
+      : true;
+    
+    if (allSuccessful && hasUniqueBlocks) {
       // Add results to comparisons
       for (const config of COMPARISONS_CONFIG) {
         comparisons[config.key].push({ gene, ...results[config.key] });
@@ -262,6 +277,8 @@ const runComparison = async (accession1, accession2, silent = true) => {
       const anyFailed = COMPARISONS_CONFIG.some(config => !results[config.key]);
       if (anyFailed) {
         console.log(`  ✗ Comparison failed for one or more pairs, skipping ${gene}`);
+      } else if (uniqueBlocks && allSuccessful) {
+        console.log(`  ✗ Multiple blocks found in one or more pairs, skipping ${gene} (use without --unique-blocks to include)`);
       } else {
         console.log(`  ✗ No conserved blocks found in one or more pairs, skipping ${gene}`);
       }
@@ -426,4 +443,27 @@ const runComparison = async (accession1, accession2, silent = true) => {
   }
   
   console.timeEnd('⏱️  Total time');
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(2) + 's';
+  
+  // Generate main HTML report
+  const html = generateBatchHTML({
+    fullyComparedGenes,
+    comparisons,
+    comparisonsConfig: COMPARISONS_CONFIG,
+    organisms: ORGANISMS,
+    geneResults,
+    fragmentedGenes,
+    nmOnly,
+    uniqueBlocks,
+    totalTime
+  });
+  saveHTMLReport(html, 'batch-compare-report.html');
+  
+  // Generate table-only report
+  const tableHTML = generateBatchTableHTML({
+    fullyComparedGenes,
+    comparisons,
+    comparisonsConfig: COMPARISONS_CONFIG
+  });
+  saveHTMLReport(tableHTML, 'batch-compare-table.html');
 })();

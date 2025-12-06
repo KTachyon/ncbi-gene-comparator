@@ -31,3 +31,6 @@ temp/
 # WASM build artifacts (source code and built files are committed)
 wasm/rust/target/
 
+# Generated HTML reports
+reports/
+

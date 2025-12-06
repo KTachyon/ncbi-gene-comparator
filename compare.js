@@ -9,6 +9,7 @@ import { runSingleComparison } from "./lib/sequence-loader.js";
 import { printComparison } from "./lib/formatter.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
 import { init as initComparison } from "./lib/comparison.js";
+import { generateComparisonHTML, generateSingleComparisonHTML, saveHTMLReport } from "./lib/html-report.js";
 
 // ============================================================================
 // CONFIGURATION
@@ -132,7 +133,7 @@ if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
         const protein = (await initComparison()).compareProteins(seq1, seq2, nucResult);
         printComparison("Amino acid", protein.result);
         
-        comparisons.push({ config, nucResult, aaResult: protein.result });
+        comparisons.push({ config, nucResult, aaResult: protein.result, seq1Data, seq2Data });
       }
       
       // Calculate conserved block identity for summary
@@ -154,6 +155,18 @@ if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
       
       console.log(`${"=".repeat(MAX_LINE_LENGTH)}\n`);
       
+      // Generate main HTML report
+      const html = generateComparisonHTML(geneName, accessions, comparisons, ORGANISMS);
+      const filename = `compare-${geneName.toLowerCase()}.html`;
+      saveHTMLReport(html, filename);
+      
+      // Generate individual comparison reports
+      for (let i = 0; i < comparisons.length; i++) {
+        const singleHTML = generateSingleComparisonHTML(comparisons[i], ORGANISMS);
+        const singleFilename = `compare-${geneName.toLowerCase()}-${i + 1}.html`;
+        saveHTMLReport(singleHTML, singleFilename);
+      }
+      
     } else if (args.length === 2) {
       // Direct accession comparison (original behavior)
       const accession1 = args[0];
@@ -170,6 +183,23 @@ if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
       
       const protein = (await initComparison()).compareProteins(seq1, seq2, nucResult);
       printComparison("Amino acid", protein.result);
+      
+      // Generate HTML report for direct accession comparison
+      const directAccessions = {};
+      const directComparisons = [{
+        config: { org1: 'seq1', org2: 'seq2', label: 'Direct Comparison' },
+        nucResult,
+        aaResult: protein.result,
+        seq1Data,
+        seq2Data
+      }];
+      const directOrganisms = {
+        seq1: { id: 'seq1', label: 'Sequence 1' },
+        seq2: { id: 'seq2', label: 'Sequence 2' }
+      };
+      const html = generateComparisonHTML(`${accession1}_vs_${accession2}`, directAccessions, directComparisons, directOrganisms);
+      const filename = `compare-${accession1.replace(/[^a-zA-Z0-9]/g, '_')}_vs_${accession2.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+      saveHTMLReport(html, filename);
       
     } else {
       console.error('\nError: Invalid number of arguments');
