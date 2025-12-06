@@ -1,0 +1,11 @@
+{
+  "name": "dna-wasm-rust",
+  "version": "0.1.0",
+  "files": [
+    "dna_wasm_rust_bg.wasm",
+    "dna_wasm_rust.js",
+    "dna_wasm_rust.d.ts"
+  ],
+  "main": "dna_wasm_rust.js",
+  "types": "dna_wasm_rust.d.ts"
+}

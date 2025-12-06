@@ -6,9 +6,9 @@
 // Import local modules
 import { loadGeneMap } from "./lib/cache.js";
 import { runSingleComparison } from "./lib/sequence-loader.js";
-import { compareProteins } from "./lib/protein-comparison.js";
 import { printComparison } from "./lib/formatter.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
+import { init as initComparison } from "./lib/comparison.js";
 
 // ============================================================================
 // CONFIGURATION
@@ -116,19 +116,23 @@ if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
         console.log(`COMPARISON ${i + 1}: ${config.label}`);
         console.log(`${"=".repeat(MAX_LINE_LENGTH)}`);
         
-        const comp = await runSingleComparison(accessions[config.org1], accessions[config.org2]);
+        const {
+          seq1Data, seq2Data,
+          seq1, seq2,
+          nucResult
+        } = await runSingleComparison(accessions[config.org1], accessions[config.org2]);
         
         console.log(`\n${"=".repeat(MAX_LINE_LENGTH)}`);
-        console.log(`${ORGANISMS[config.org1].label}:  ${comp.seq1Data.header}`);
-        console.log(`${ORGANISMS[config.org2].label}: ${comp.seq2Data.header}`);
+        console.log(`${ORGANISMS[config.org1].label}:  ${seq1Data.header}`);
+        console.log(`${ORGANISMS[config.org2].label}: ${seq2Data.header}`);
         console.log(`${"=".repeat(MAX_LINE_LENGTH)}`);
         
-        printComparison("Nucleotide", comp.nucResult);
+        printComparison("Nucleotide", nucResult);
         
-        const protein = compareProteins(comp.seq1, comp.seq2, comp.nucResult);
+        const protein = (await initComparison()).compareProteins(seq1, seq2, nucResult);
         printComparison("Amino acid", protein.result);
         
-        comparisons.push({ config, nucResult: comp.nucResult, aaResult: protein.result });
+        comparisons.push({ config, nucResult, aaResult: protein.result });
       }
       
       // Calculate conserved block identity for summary
@@ -155,16 +159,16 @@ if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
       const accession1 = args[0];
       const accession2 = args[1];
       
-      const comp = await runSingleComparison(accession1, accession2);
+      const { seq1Data, seq2Data, seq1, seq2, nucResult } = await runSingleComparison(accession1, accession2);
       
       console.log(`\n${"=".repeat(MAX_LINE_LENGTH)}`);
-      console.log(`Sequence 1: ${comp.seq1Data.header}`);
-      console.log(`Sequence 2: ${comp.seq2Data.header}`);
+      console.log(`Sequence 1: ${seq1Data.header}`);
+      console.log(`Sequence 2: ${seq2Data.header}`);
       console.log(`${"=".repeat(MAX_LINE_LENGTH)}`);
       
-      printComparison("Nucleotide", comp.nucResult);
+      printComparison("Nucleotide", nucResult);
       
-      const protein = compareProteins(comp.seq1, comp.seq2, comp.nucResult);
+      const protein = (await initComparison()).compareProteins(seq1, seq2, nucResult);
       printComparison("Amino acid", protein.result);
       
     } else {

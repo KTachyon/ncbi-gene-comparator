@@ -5,9 +5,9 @@
 
 import { findOrthologs } from "./find-orthologs.js";
 import { runSingleComparison } from "./lib/sequence-loader.js";
-import { compareProteins } from "./lib/protein-comparison.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
 import { getGeneNames } from "./lib/genes.js";
+import { init as initComparison } from "./lib/comparison.js";
 
 const GENE_LIST = getGeneNames();
 
@@ -61,7 +61,7 @@ const runComparison = async (accession1, accession2, silent = true) => {
     const { seq1, seq2, nucResult } = await runSingleComparison(accession1, accession2);
     
     // Amino acid comparison
-    const { result: aaResult } = compareProteins(seq1, seq2, nucResult);
+    const { result: aaResult } = (await initComparison()).compareProteins(seq1, seq2, nucResult);
     
     const nucConservedIdentity = calculateBlockIdentity(nucResult.conservedBlocks);
     const aaConservedIdentity = calculateBlockIdentity(aaResult.conservedBlocks);
@@ -105,6 +105,8 @@ const runComparison = async (accession1, accession2, silent = true) => {
 
 // Main
 (async () => {
+  console.time('⏱️  Total time');
+  
   const args = process.argv.slice(2);
   
   if (args.includes('--help') || args.includes('-h')) {
@@ -422,4 +424,6 @@ const runComparison = async (accession1, accession2, silent = true) => {
     console.log(`  - Highly divergent regions`);
     console.log(`  - Alternative splicing variants`);
   }
+  
+  console.timeEnd('⏱️  Total time');
 })();

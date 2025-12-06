@@ -19,6 +19,18 @@ A modular DNA sequence comparison tool with NCBI integration, conserved blocks d
 npm install
 ```
 
+The Rust WASM module is pre-built and included in the repository. If you need to rebuild it (e.g., after modifying Rust code):
+
+```bash
+cd wasm
+bash build.sh
+```
+
+**Prerequisites for rebuilding WASM:**
+- Rust toolchain (`rustup`)
+- `wasm-pack` (`cargo install wasm-pack`)
+- `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
+
 ## Usage
 
 ### 1. Compare Two Sequences by Gene Name
@@ -79,11 +91,17 @@ dna/
 │   ├── ncbi.js                # NCBI API (ESearch, ESummary, EFetch) + caching + rate limiting
 │   ├── parser.js              # FASTA format parsing
 │   ├── validator.js           # Sequence normalization and validation
-│   ├── comparison.js          # Nucleotide alignment and conserved blocks
-│   ├── translation.js         # DNA to amino acid translation (genetic code)
-│   ├── protein-comparison.js  # Amino acid comparison with reading frame detection
-│   ├── reading-frame.js       # Reading frame optimization
-│   └── formatter.js           # Console output formatting
+│   ├── comparison.js          # Rust WASM comparison engine (singleton initialization)
+│   ├── sequence-loader.js     # Sequence fetching and comparison orchestration
+│   ├── formatter.js           # Console output formatting
+│   ├── cache.js               # Gene map and sequence caching
+│   ├── genes.js               # Gene list management
+│   ├── logger.js              # Logging utilities
+│   └── constants.js           # Configuration constants
+├── wasm/
+│   └── rust/                  # Rust WASM implementation
+│       ├── src/lib.rs         # Rust source code
+│       └── pkg/               # Built WASM module (committed)
 └── seqs/                      # Cached sequences (created automatically)
 ```
 
@@ -110,27 +128,22 @@ All API calls are rate-limited to 2 requests/second (500ms between requests) wit
 - `validateDNA(seq)` - Validate DNA sequence (A, C, G, T, N, - only)
 
 ### lib/comparison.js
+Rust WASM-powered comparison engine. Uses singleton pattern - initializes once and returns cached instance.
+
+**Initialization:**
+- `init()` - Initialize comparison engine (returns object with all functions, singleton pattern)
+
+**Exports (from init() return object):**
+- `compareSequences(seq1, seq2)` - Find best alignment allowing offsets (WASM)
+- `compareProteins(seq1, seq2, nucResult)` - Full protein comparison with automatic reading frame detection (fully implemented in Rust WASM with logging)
+
+The engine tries all 9 reading frame combinations (3×3) and selects the best amino acid alignment. Returns alignment with offsets, identity percentage, and conserved blocks. Filters out blocks < 15% of largest block.
+
+### lib/sequence-loader.js
 **Exports:**
-- `compareSequences(seq1, seq2)` - Find best alignment allowing offsets
-- `findConservedBlocks(mask, windowSize, minIdentity)` - Identify conserved regions
+- `runSingleComparison(acc1, acc2)` - Load sequences from NCBI, validate, and run nucleotide comparison
 
-Returns alignment with offsets, identity percentage, and conserved blocks. Filters out blocks < 15% of largest block.
-
-### lib/translation.js
-**Exports:**
-- `translateDNA(seq)` - Translate DNA to amino acids using standard genetic code
-
-### lib/protein-comparison.js
-**Exports:**
-- `compareProteins(seq1, seq2, nucResult)` - Compare amino acid sequences with automatic reading frame detection
-
-Tries all 9 reading frame combinations (3×3) and selects the best amino acid alignment.
-
-### lib/reading-frame.js
-**Exports:**
-- `adjustForReadingFrame(seq1, seq2, nucResult)` - Automatically find and apply best reading frame
-
-Used internally by `compareProteins`.
+Orchestrates fetching, parsing, validation, and comparison. Automatically initializes comparison engine.
 
 ### lib/formatter.js
 **Exports:**

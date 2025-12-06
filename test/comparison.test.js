@@ -1,113 +1,76 @@
-// Tests for sequence comparison and alignment
+// Tests for sequence comparison, translation, and protein alignment
+// Rust WASM implementation
 
-import { describe, it, expect } from "vitest";
-import { 
-  compareSequenceRegions, 
-  findConservedBlocks,
-  compareSequences 
-} from "../lib/comparison.js";
+import { describe, it, beforeEach, afterEach, beforeAll, vi, expect } from "vitest";
+import { init as initComparison } from "../lib/comparison.js";
+import {
+  SEGMENT_WINDOW_LENGTH,
+  MIN_IDENTITY,
+  MIN_SIGNIFICANT_LENGTH_GROUP,
+  MIN_SEQUENCE_OVERLAP_PCT,
+  AA_SEGMENT_WINDOW_LENGTH
+} from "../lib/constants.js";
+
+// Initialize Rust WASM engine before all tests
+let comparison;
+beforeAll(async () => {
+  comparison = await initComparison();
+});
+
+// ============================================================================
+// Region Comparison Tests
+// ============================================================================
 
 describe("Sequence Comparison", () => {
-  describe("compareSequenceRegions", () => {
-    it("should find perfect match", () => {
-      const result = compareSequenceRegions("ATGC", "ATGC", 4);
+  describe("compareSequences (wrapper function)", () => {
+    it("should call WASM with correct arguments", () => {
+      const seq1 = "ATGCCCGGG";
+      const seq2 = "ATGCCCGGG";
       
-      expect(result.matches).toBe(4);
-      expect(result.mismatches).toBe(0);
-      expect(result.identity).toBe(1.0);
-      expect(result.mask).toBe("ATGC");
+      const wasmSpy = vi.spyOn(comparison.wasm, "compare_sequences_full");
+      
+      comparison.compareSequences(seq1, seq2);
+      
+      expect(wasmSpy).toHaveBeenCalledWith(
+        seq1,
+        seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      
+      wasmSpy.mockRestore();
     });
 
-    it("should detect mismatches with IUPAC codes", () => {
-      const result = compareSequenceRegions("ATGC", "ATTC", 4);
+    it("should parse and return JSON result", () => {
+      const seq1 = "ATGCCCGGG";
+      const seq2 = "ATGCCCGGG";
       
-      expect(result.matches).toBe(3);
-      expect(result.mismatches).toBe(1);
-      expect(result.identity).toBe(0.75);
-      expect(result.mask).toBe("AT?C"); // ? for mismatches
-    });
-
-    it("should handle all mismatches", () => {
-      const result = compareSequenceRegions("AAAA", "TTTT", 4);
+      const result = comparison.compareSequences(seq1, seq2);
       
-      expect(result.matches).toBe(0);
-      expect(result.mismatches).toBe(4);
-      expect(result.identity).toBe(0);
-      expect(result.mask).toBe("????"); // ? for mismatches
-    });
-
-    it("should handle empty sequences", () => {
-      const result = compareSequenceRegions("", "", 0);
-      
-      expect(result.matches).toBe(0);
-      expect(result.mismatches).toBe(0);
-      expect(result.identity).toBe(0);
-      expect(result.mask).toBe("");
+      expect(result).toHaveProperty("identity");
+      expect(result).toHaveProperty("mismatches");
+      expect(result).toHaveProperty("length");
+      expect(result).toHaveProperty("offset1");
+      expect(result).toHaveProperty("offset2");
+      expect(result).toHaveProperty("conservedBlocks");
     });
   });
 
-  describe("findConservedBlocks", () => {
-    it("should find single conserved block in perfect match", () => {
-      // Create a 66bp perfect match (default window size)
-      const mask = "A".repeat(66);
-      const blocks = findConservedBlocks(mask);
-      
-      expect(blocks.length).toBe(1);
-      expect(blocks[0].length).toBe(66);
-    });
-
-    it("should find multiple conserved blocks", () => {
-      // Two conserved blocks separated by mismatches
-      const conserved = "A".repeat(66);
-      const nonConserved = "?".repeat(66);
-      const mask = conserved + nonConserved + conserved;
-      
-      const blocks = findConservedBlocks(mask);
-      
-      expect(blocks.length).toBe(2);
-      expect(blocks[0].length).toBe(66);
-      expect(blocks[1].start).toBe(132);
-    });
-
-    it("should filter out small blocks (< 15% of largest)", () => {
-      // One large block and one tiny block
-      const largeBlock = "A".repeat(200);
-      const tinyBlock = "A".repeat(10); // < 15% of 200
-      const gap = "?".repeat(66);
-      
-      const mask = largeBlock + gap + tinyBlock;
-      const blocks = findConservedBlocks(mask);
-      
-      // Should only return the large block
-      expect(blocks.length).toBe(1);
-      // Block length may vary due to window boundaries
-      expect(blocks[0].length).toBeGreaterThanOrEqual(198);
-      expect(blocks[0].length).toBeLessThanOrEqual(200);
-    });
-
-    it("should accept blocks with some mismatches", () => {
-      // 66bp with ~20% mismatches (still above 67% threshold)
-      const goodBlock = "A".repeat(50) + "?".repeat(16); // ? for mismatches
-      const blocks = findConservedBlocks(goodBlock);
-      
-      expect(blocks.length).toBe(1);
-    });
-
-    it("should reject blocks below identity threshold", () => {
-      // 66bp with 50% mismatches (below 67% threshold)
-      const badBlock = "A".repeat(33) + "?".repeat(33); // ? for mismatches
-      const blocks = findConservedBlocks(badBlock);
-      
-      expect(blocks.length).toBe(0);
-    });
-  });
-
-  describe("compareSequences", () => {
+  describe("wasm.compare_sequences_full", () => {
     it("should handle perfect match", () => {
       const seq1 = "ATGCCCGGG";
       const seq2 = "ATGCCCGGG";
       
-      const result = compareSequences(seq1, seq2);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.identity).toBe(1.0);
       expect(result.mismatches).toBe(0);
@@ -118,9 +81,16 @@ describe("Sequence Comparison", () => {
 
     it("should handle sequences with offset", () => {
       const seq1 = "ATGCCCGGG";
-      const seq2 = "XXXATGCCCGGG"; // 3bp offset
+      const seq2 = "XXXATGCCCGGG";
       
-      const result = compareSequences(seq1, seq2);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.offset1).toBe(0);
       expect(result.offset2).toBe(3);
@@ -130,9 +100,16 @@ describe("Sequence Comparison", () => {
 
     it("should find best alignment with mismatches", () => {
       const seq1 = "ATGAAACCCGGG";
-      const seq2 = "ATGAAACCCTTT"; // Last 3 bases differ
+      const seq2 = "ATGAAACCCTTT";
       
-      const result = compareSequences(seq1, seq2);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.length).toBe(12);
       expect(result.mismatches).toBe(3);
@@ -140,51 +117,29 @@ describe("Sequence Comparison", () => {
     });
 
     it("should handle empty sequences", () => {
-      const result = compareSequences("", "ATGC");
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        "", "ATGC",
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.length).toBe(0);
       expect(result.identity).toBe(0);
       expect(result.truncated).toBe(true);
     });
 
-    it("should require minimum 50% overlap", () => {
-      const seq1 = "ATGCCCGGG";
-      const seq2 = "TTTAAA"; // Too short for 50% overlap
-      
-      const result = compareSequences(seq1, seq2);
-      
-      // Should still find some overlap
-      expect(result.length).toBeGreaterThanOrEqual(Math.ceil(Math.min(9, 6) * 0.5));
-    });
-
-    it("should detect truncation", () => {
-      const seq1 = "ATGCCCGGG";
-      const seq2 = "ATGCCC"; // Shorter
-      
-      const result = compareSequences(seq1, seq2);
-      
-      expect(result.truncated).toBe(true);
-    });
-
-    it("should skip alignments with overlap smaller than minimum", () => {
-      // Create sequences where some alignment positions have overlap < minOverlap
-      // minOverlap = ceil(min(seq1.length, seq2.length) * 0.5)
-      // For seq lengths 20 and 20, minOverlap = ceil(20 * 0.5) = 10
-      // The loop goes from -seq2.length + minOverlap to seq1.length - minOverlap
-      // At extreme offsets, overlapLen will be < minOverlap, triggering continue
-      const seq1 = "ATGCCCGGGTTTAAACCCGG";  // 20bp
-      const seq2 = "AAATTTCCCGGGATGCCCGG";  // 20bp
-      
-      const result = compareSequences(seq1, seq2);
-      
-      // Should still find the best valid alignment
-      expect(result.length).toBeGreaterThanOrEqual(10); // At least minOverlap
-      expect(result.identity).toBeGreaterThanOrEqual(0);
-      expect(result.identity).toBeLessThanOrEqual(1);
-    });
-
     it("should handle both sequences being empty", () => {
-      const result = compareSequences("", "");
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        "", "",
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.length).toBe(0);
       expect(result.identity).toBe(0);
@@ -192,53 +147,399 @@ describe("Sequence Comparison", () => {
       expect(result.conservedBlocks).toEqual([]);
     });
 
+    it("should require minimum 50% overlap", () => {
+      const seq1 = "ATGCCCGGG";
+      const seq2 = "TTTAAA";
+      
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
+      
+      expect(result.length).toBeGreaterThanOrEqual(Math.ceil(Math.min(9, 6) * 0.5));
+    });
+
+    it("should detect truncation", () => {
+      const seq1 = "ATGCCCGGG";
+      const seq2 = "ATGCCC";
+      
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
+      
+      expect(result.truncated).toBe(true);
+    });
+
     it("should stop early on perfect match", () => {
-      // When mismatches === 0, the loop breaks early
       const seq1 = "ATGCCCGGG";
       const seq2 = "ATGCCCGGG";
       
-      const result = compareSequences(seq1, seq2);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
       expect(result.mismatches).toBe(0);
       expect(result.identity).toBe(1.0);
     });
 
     it("should prefer longer overlap when identity is similar", () => {
-      // Test the isBetter condition: similar identity but longer overlap wins
       const seq1 = "ATGCCCGGGTTTAAACCC";
       const seq2 = "ATGCCCGGGTTTAAACCC";
       
-      const result = compareSequences(seq1, seq2);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
-      // Should find the full-length perfect alignment
       expect(result.length).toBe(18);
       expect(result.identity).toBe(1.0);
     });
-  });
 
-  describe("findConservedBlocks edge cases", () => {
-    it("should handle mask shorter than window size", () => {
-      const shortMask = "ATGATG"; // 6 characters, less than default 66
-      const blocks = findConservedBlocks(shortMask);
+    it("should skip alignments with overlap smaller than minimum", () => {
+      const seq1 = "ATGCCCGGGTTTAAACCCGG";
+      const seq2 = "AAATTTCCCGGGATGCCCGG";
       
-      // Should still process and return a block if it passes identity threshold
-      expect(Array.isArray(blocks)).toBe(true);
-    });
-
-    it("should keep all blocks when filtering would remove all", () => {
-      // When filteredBlocks.length would be 0, return original blocks
-      // This happens when all blocks are below minSignificantLength threshold
-      // but we need at least one block
-      const conserved1 = "A".repeat(66);
-      const conserved2 = "A".repeat(66);
-      const gap = "?".repeat(66);
+      const jsonResult = comparison.wasm.compare_sequences_full(
+        seq1, seq2,
+        SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP,
+        MIN_SEQUENCE_OVERLAP_PCT
+      );
+      const result = JSON.parse(jsonResult);
       
-      // Two equal-sized blocks - neither is < 15% of the other
-      const mask = conserved1 + gap + conserved2;
-      const blocks = findConservedBlocks(mask);
-      
-      expect(blocks.length).toBe(2);
+      expect(result.length).toBeGreaterThanOrEqual(10);
+      expect(result.identity).toBeGreaterThanOrEqual(0);
+      expect(result.identity).toBeLessThanOrEqual(1);
     });
   });
 });
 
+// ============================================================================
+// Protein Comparison Tests
+// ============================================================================
+
+describe("Protein Comparison", () => {
+  // Mock console to suppress logs during tests
+  let originalLog;
+  beforeEach(() => {
+    originalLog = console.log;
+    console.log = vi.fn();
+  });
+
+  afterEach(() => {
+    console.log = originalLog;
+  });
+
+  describe("compareProteins (wrapper function)", () => {
+    it("should call WASM with correct arguments", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      const nucResult = {
+        offset1: 0,
+        offset2: 0,
+        length: seq1.length,
+        mask: seq1,
+        mismatches: 0,
+        identity: 1.0,
+        conservedBlocks: []
+      };
+      
+      const wasmSpy = vi.spyOn(comparison.wasm, "compare_proteins_full");
+      
+      comparison.compareProteins(seq1, seq2, nucResult);
+      
+      expect(wasmSpy).toHaveBeenCalledWith(
+        seq1,
+        seq2,
+        nucResult.offset1,
+        nucResult.offset2,
+        nucResult.length,
+        AA_SEGMENT_WINDOW_LENGTH,
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      
+      wasmSpy.mockRestore();
+    });
+
+    it("should parse and return formatted result", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      const nucResult = {
+        offset1: 0,
+        offset2: 0,
+        length: seq1.length,
+        mask: seq1,
+        mismatches: 0,
+        identity: 1.0,
+        conservedBlocks: []
+      };
+      
+      const result = comparison.compareProteins(seq1, seq2, nucResult);
+      
+      expect(result).toHaveProperty("aa1");
+      expect(result).toHaveProperty("aa2");
+      expect(result).toHaveProperty("result");
+      expect(result.result).toHaveProperty("mask");
+      expect(result.result).toHaveProperty("mismatches");
+      expect(result.result).toHaveProperty("length");
+      expect(result.result).toHaveProperty("identity");
+      expect(result.result).toHaveProperty("frame1");
+      expect(result.result).toHaveProperty("frame2");
+      expect(result.result).toHaveProperty("conservedBlocks");
+    });
+  });
+
+  describe("wasm.compare_proteins_full", () => {
+    describe("Codon to Amino Acid Mapping", () => {
+      it("should translate start codon ATG to M", () => {
+        const seq = "ATGAAA"; // ATG + AAA (minimum: 1 codon * 3 = 3 nucleotides)
+        const jsonResult = comparison.wasm.compare_proteins_full(
+          seq, seq, 0, 0, seq.length,
+          1, // AA_SEGMENT_WINDOW_LENGTH
+          MIN_IDENTITY,
+          MIN_SIGNIFICANT_LENGTH_GROUP
+        );
+        const result = JSON.parse(jsonResult);
+        expect(result.aa1[0]).toBe("M");
+        expect(result.aa2[0]).toBe("M");
+      });
+
+      it("should translate stop codons correctly", () => {
+        const stopCodons = ["TAA", "TAG", "TGA"];
+        for (const stopCodon of stopCodons) {
+          const seq = "ATG" + stopCodon;
+          const jsonResult = comparison.wasm.compare_proteins_full(
+            seq, seq, 0, 0, seq.length,
+            1, // AA_SEGMENT_WINDOW_LENGTH
+            MIN_IDENTITY,
+            MIN_SIGNIFICANT_LENGTH_GROUP
+          );
+          const result = JSON.parse(jsonResult);
+          expect(result.aa1[1]).toBe("*");
+          expect(result.aa2[1]).toBe("*");
+        }
+      });
+
+      it("should translate all 64 codons correctly", () => {
+        // Complete genetic code: all 64 codons
+        const codonToAA = {
+          // Stop codons
+          "TAA": "*", "TAG": "*", "TGA": "*",
+          // Methionine (start)
+          "ATG": "M",
+          // Alanine
+          "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",
+          // Arginine
+          "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R", "AGA": "R", "AGG": "R",
+          // Asparagine
+          "AAT": "N", "AAC": "N",
+          // Aspartic acid
+          "GAT": "D", "GAC": "D",
+          // Cysteine
+          "TGT": "C", "TGC": "C",
+          // Glutamine
+          "CAA": "Q", "CAG": "Q",
+          // Glutamic acid
+          "GAA": "E", "GAG": "E",
+          // Glycine
+          "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G",
+          // Histidine
+          "CAT": "H", "CAC": "H",
+          // Isoleucine
+          "ATT": "I", "ATC": "I", "ATA": "I",
+          // Leucine
+          "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L", "TTA": "L", "TTG": "L",
+          // Lysine
+          "AAA": "K", "AAG": "K",
+          // Phenylalanine
+          "TTT": "F", "TTC": "F",
+          // Proline
+          "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P",
+          // Serine
+          "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S", "AGT": "S", "AGC": "S",
+          // Threonine
+          "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T",
+          // Tryptophan
+          "TGG": "W",
+          // Tyrosine
+          "TAT": "Y", "TAC": "Y",
+          // Valine
+          "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",
+        };
+
+        // Test all 64 codons
+        const testCodons = Object.entries(codonToAA);
+
+        for (const [codon, expectedAA] of testCodons) {
+          const seq = "ATG" + codon; // ATG + test codon (minimum: 1 codon * 3 = 3 nucleotides)
+          const jsonResult = comparison.wasm.compare_proteins_full(
+            seq, seq, 0, 0, seq.length,
+            1, // AA_SEGMENT_WINDOW_LENGTH
+            MIN_IDENTITY,
+            MIN_SIGNIFICANT_LENGTH_GROUP
+          );
+          const result = JSON.parse(jsonResult);
+          expect(result.aa1[1]).toBe(expectedAA, `Codon ${codon} should translate to ${expectedAA}`);
+          expect(result.aa2[1]).toBe(expectedAA, `Codon ${codon} should translate to ${expectedAA}`);
+        }
+      });
+
+      it("should handle sequences with multiple codons correctly", () => {
+        // Test a known sequence: ATG AAA CCC GGG TTT
+        // Expected: M K P G F
+        const seq = "ATGAAACCCGGGTTT";
+        
+        const jsonResult = comparison.wasm.compare_proteins_full(
+          seq, seq, 0, 0, seq.length,
+          1, // AA_SEGMENT_WINDOW_LENGTH
+          MIN_IDENTITY,
+          MIN_SIGNIFICANT_LENGTH_GROUP
+        );
+        const result = JSON.parse(jsonResult);
+        
+        // Check first 5 amino acids
+        expect(result.aa1.substring(0, 5)).toBe("MKPGF");
+        expect(result.aa2.substring(0, 5)).toBe("MKPGF");
+      });
+
+      it("should handle invalid nucleotides by returning X", () => {
+        // Sequence with invalid nucleotide should produce X
+        const seq = "ATGNNN"; // N is invalid
+        const jsonResult = comparison.wasm.compare_proteins_full(
+          seq, seq, 0, 0, seq.length,
+          1, // AA_SEGMENT_WINDOW_LENGTH
+          MIN_IDENTITY,
+          MIN_SIGNIFICANT_LENGTH_GROUP
+        );
+        const result = JSON.parse(jsonResult);
+        
+        expect(result.aa1[1]).toBe("X");
+        expect(result.aa2[1]).toBe("X");
+      });
+    });
+
+    it("should compare proteins from identical DNA sequences", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq1, seq2, 0, 0, seq1.length,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(result.identity).toBe(1.0);
+      expect(result.mismatches).toBe(0);
+      expect(result.aa1.length).toBeGreaterThan(0);
+      expect(result.aa2.length).toBeGreaterThan(0);
+    });
+
+    it("should detect amino acid differences", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAATTTGGG";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq1, seq2, 0, 0, 12,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(result.identity).toBeGreaterThanOrEqual(0);
+      expect(result.identity).toBeLessThanOrEqual(1.0);
+      expect(typeof result.mismatches).toBe("number");
+      expect(typeof result.mask).toBe("string");
+    });
+
+    it("should include reading frame information", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq1, seq2, 0, 0, 12,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(typeof result.frame1).toBe("number");
+      expect(typeof result.frame2).toBe("number");
+      expect(result.frame1).toBeGreaterThanOrEqual(0);
+      expect(result.frame1).toBeLessThan(3);
+      expect(result.frame2).toBeGreaterThanOrEqual(0);
+      expect(result.frame2).toBeLessThan(3);
+    });
+
+    it("should find conserved blocks in proteins", () => {
+      const seq = "ATGAAACCCGGGTTT";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq, seq, 0, 0, seq.length,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(result.conservedBlocks.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should handle sequences with different offsets", () => {
+      const seq1 = "CCCATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq1, seq2, 3, 0, 12,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(result.identity).toBeGreaterThanOrEqual(0);
+      expect(result.identity).toBeLessThanOrEqual(1.0);
+      expect(result.aa1.length).toBeGreaterThan(0);
+      expect(result.aa2.length).toBeGreaterThan(0);
+    });
+
+    it("should calculate protein offsets from nucleotide offsets", () => {
+      const seq1 = "ATGAAACCCGGG";
+      const seq2 = "ATGAAACCCGGG";
+      
+      const jsonResult = comparison.wasm.compare_proteins_full(
+        seq1, seq2, 6, 0, 6,
+        1, // AA_SEGMENT_WINDOW_LENGTH
+        MIN_IDENTITY,
+        MIN_SIGNIFICANT_LENGTH_GROUP
+      );
+      const result = JSON.parse(jsonResult);
+
+      expect(typeof result.offset1).toBe("number");
+      expect(typeof result.offset2).toBe("number");
+    });
+  });
+});

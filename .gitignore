@@ -28,3 +28,6 @@ tmp/
 temp/
 *.tmp
 
+# WASM build artifacts (source code and built files are committed)
+wasm/rust/target/
+

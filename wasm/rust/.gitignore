@@ -1,0 +1,7 @@
+# Rust build artifacts (target directory contains compiled binaries)
+target/
+
+# Keep source code (src/) - committed
+# Keep built WASM files (pkg/) - committed
+# Keep Cargo.toml and Cargo.lock - committed for reproducible builds
+
