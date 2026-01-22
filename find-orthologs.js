@@ -11,28 +11,10 @@ import { searchNCBI, getSummaries, fetchFromNCBI } from "./lib/ncbi.js";
 import { loadGeneMap, saveGeneMap, getSequenceCacheFolder } from "./lib/cache.js";
 import { createLogger } from "./lib/logger.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
+import { ORGANISMS } from "./organisms.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const isMainModule = process.argv[1] === __filename;
-
-// Organism definitions
-const ORGANISMS = {
-  human: {
-    name: "Homo sapiens",
-    label: "Human",
-    searchTerm: "human[Organism]",
-  },
-  rhesus: {
-    name: "Macaca mulatta",
-    label: "Rhesus Monkey",
-    searchTerm: "rhesus monkey[Organism]",
-  },
-  mouse: {
-    name: "Mus musculus",
-    label: "House Mouse",
-    searchTerm: "house mouse[Organism]",
-  },
-};
 
 // Search for a gene in a specific organism
 const searchGeneInOrganism = async (geneName, organism, logger) => {

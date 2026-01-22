@@ -9,6 +9,7 @@ import { MAX_LINE_LENGTH } from "./lib/constants.js";
 import { getGeneNames } from "./lib/genes.js";
 import { init as initComparison } from "./lib/comparison.js";
 import { generateBatchHTML, generateBatchTableHTML, saveHTMLReport } from "./lib/html-report.js";
+import { ORGANISMS } from "./organisms.js";
 
 const GENE_LIST = getGeneNames();
 
@@ -16,19 +17,12 @@ const GENE_LIST = getGeneNames();
 // CONFIGURATION
 // ============================================================================
 
-// Organism configuration - add/remove/modify organisms here
-const ORGANISMS = {
-  human: { id: 'human', label: 'Human', shortLabel: 'H' },
-  rhesus: { id: 'rhesus', label: 'Rhesus', shortLabel: 'R' },
-  mouse: { id: 'mouse', label: 'Mouse', shortLabel: 'M' }
-};
-
 // Comparison pairs - define which organisms to compare
 // Each pair is [organism1_id, organism2_id]
 const COMPARISON_PAIRS = [
-  ['human', 'rhesus'],
-  ['human', 'mouse'],
-  ['rhesus', 'mouse']
+  [ORGANISMS.human.id, ORGANISMS.rhesus.id],
+  [ORGANISMS.human.id, ORGANISMS.pig.id],
+  [ORGANISMS.rhesus.id, ORGANISMS.pig.id]
 ];
 
 // Generate comparison labels and keys
@@ -177,12 +171,14 @@ const runComparison = async (accession1, accession2, silent = true) => {
         runComparison: false,
         silent: true
       });
+
+      const totalOrganisms = Object.keys(ORGANISMS).length;
       
-      if (result && Object.keys(result.accessions).length === 3) {
+      if (result && Object.keys(result.accessions).length === totalOrganisms) {
         geneResults[gene] = result.accessions;
-        console.log(`  ✓ ${gene}: Found all 3 orthologs ${result.fromCache ? '(cached)' : '(new)'}`);
+        console.log(`  ✓ ${gene}: Found all ${totalOrganisms} orthologs ${result.fromCache ? '(cached)' : '(new)'}`);
       } else if (result) {
-        console.log(`  ⚠️  ${gene}: Only found ${Object.keys(result.accessions).length}/3 orthologs`);
+        console.log(`  ⚠️  ${gene}: Only found ${Object.keys(result.accessions).length}/${totalOrganisms} orthologs`);
         geneResults[gene] = result.accessions;
       } else {
         console.log(`  ✗ ${gene}: No results found`);
@@ -193,13 +189,22 @@ const runComparison = async (accession1, accession2, silent = true) => {
   }
   
   console.log('');
+
+  // Get all unique organisms needed for comparisons
+  const comparisonOrganisms = Array.from(new Set(COMPARISON_PAIRS.flat()));
+  const requiredOrganismCount = comparisonOrganisms.length;
   
-  // Filter to only genes with all 3 orthologs
+  // Filter to only genes with all organisms needed for comparisons
   let completeGenes = Object.entries(geneResults)
-    .filter(([_, acc]) => Object.keys(acc).length === 3)
+    .filter(([_, acc]) => {
+      // Check that all required organisms have valid accessions
+      return comparisonOrganisms.every(organismId => 
+        acc[organismId] && acc[organismId] !== null && acc[organismId] !== undefined
+      );
+    })
     .map(([gene, _]) => gene);
   
-  console.log(`\n✓ ${completeGenes.length}/${GENE_LIST.length} genes have all 3 orthologs`);
+  console.log(`\n✓ ${completeGenes.length}/${GENE_LIST.length} genes have all ${requiredOrganismCount} orthologs needed for comparison`);
   
   // Filter out XM sequences if --nm-only flag is set
   if (nmOnly) {

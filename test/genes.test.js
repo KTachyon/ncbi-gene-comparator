@@ -9,9 +9,9 @@ describe("Genes", () => {
       const names = getGeneNames();
       
       expect(Array.isArray(names)).toBe(true);
-      expect(names).toContain("BRCA1");
       expect(names).toContain("TP53");
       expect(names).toContain("EGFR");
+      expect(names).toContain("MYC");
     });
 
     it("should return same count as genes object keys", () => {
@@ -26,18 +26,19 @@ describe("Genes", () => {
     it("should filter genes by Cancer category", () => {
       const cancerGenes = getGenesByCategory("Cancer");
       
-      expect(cancerGenes).toContain("BRCA1");
-      expect(cancerGenes).toContain("BRCA2");
       expect(cancerGenes).toContain("TP53");
       expect(cancerGenes).toContain("KRAS");
+      expect(cancerGenes).toContain("BRAF");
+      expect(cancerGenes).toContain("MYC");
     });
 
     it("should filter genes by Immune category", () => {
       const immuneGenes = getGenesByCategory("Immune");
       
-      expect(immuneGenes).toContain("CD4");
       expect(immuneGenes).toContain("CD8A");
-      expect(immuneGenes).toContain("IL6");
+      expect(immuneGenes).toContain("CD3D");
+      expect(immuneGenes).toContain("B2M");
+      expect(immuneGenes).toContain("CCL2");
     });
 
     it("should return empty array for non-existent category", () => {

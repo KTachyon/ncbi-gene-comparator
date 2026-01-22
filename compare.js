@@ -10,23 +10,17 @@ import { printComparison } from "./lib/formatter.js";
 import { MAX_LINE_LENGTH } from "./lib/constants.js";
 import { init as initComparison } from "./lib/comparison.js";
 import { generateComparisonHTML, generateSingleComparisonHTML, saveHTMLReport } from "./lib/html-report.js";
+import { ORGANISMS } from "./organisms.js";
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
-// Organism configuration - add/remove/modify organisms here
-const ORGANISMS = {
-  human: { id: 'human', label: 'Human' },
-  rhesus: { id: 'rhesus', label: 'Rhesus' },
-  mouse: { id: 'mouse', label: 'Mouse' }
-};
-
 // Comparison pairs - define which organisms to compare
 // Each pair is [organism1_id, organism2_id]
 const COMPARISON_PAIRS = [
-  ['human', 'rhesus'],
-  ['human', 'mouse']
+  [ORGANISMS.human.id, ORGANISMS.rhesus.id],
+  [ORGANISMS.human.id, ORGANISMS.pig.id]
 ];
 
 // Generate comparison configurations
